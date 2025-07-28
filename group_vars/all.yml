@@ -5,7 +5,7 @@ ansible_user: fortinbra
 # ansible_ssh_private_key_file: ~/.ssh/id_rsa
 
 # Common settings
-timezone: "America/New_York"  # Change to your timezone
+timezone: "America/Chicago"  # Change to your timezone
 ntp_servers:
   - 0.pool.ntp.org
   - 1.pool.ntp.org

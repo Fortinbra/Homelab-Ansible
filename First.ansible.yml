@@ -20,7 +20,7 @@
       - unattended-upgrades
 
     # Timezone setting
-    system_timezone: "America/New_York"  # Change this to your timezone
+    system_timezone: "America/Chicago"  # Change this to your timezone
 
   tasks:
     - name: Display system information
