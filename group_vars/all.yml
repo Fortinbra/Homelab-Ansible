@@ -1,0 +1,19 @@
+---
+# Variables for all homelab hosts
+ansible_user: fortinbra
+# Using password authentication - no SSH key needed
+# ansible_ssh_private_key_file: ~/.ssh/id_rsa
+
+# Common settings
+timezone: "America/New_York"  # Change to your timezone
+ntp_servers:
+  - 0.pool.ntp.org
+  - 1.pool.ntp.org
+
+# Security settings
+ssh_port: 22
+fail2ban_enabled: true
+
+# Backup settings
+backup_retention_days: 30
+backup_directory: /opt/backups

@@ -1,0 +1,39 @@
+---
+# Homelab Inventory
+# Define your homelab servers here
+
+all:
+  children:
+    homelab:
+      children:
+        docker_hosts:
+          hosts:
+            PiTony:
+              ansible_host: 192.168.27.104
+              ansible_user: fortinbra
+        
+        web_servers:
+          hosts:
+            # Example web servers
+            # web-01:
+            #   ansible_host: 192.168.1.110
+            #   ansible_user: your_username
+        
+        database_servers:
+          hosts:
+            # Example database servers
+            # db-01:
+            #   ansible_host: 192.168.1.120
+            #   ansible_user: your_username
+        
+        monitoring:
+          hosts:
+            # Example monitoring servers
+            # monitor-01:
+            #   ansible_host: 192.168.1.130
+            #   ansible_user: your_username
+
+  vars:
+    # Global variables for all hosts
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'

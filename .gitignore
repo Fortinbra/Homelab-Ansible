@@ -1,0 +1,29 @@
+# Ansible
+*.retry
+.vault_pass
+vault_pass.txt
+
+# Host-specific files that might contain sensitive data
+host_vars/*/vault.yml
+group_vars/*/vault.yml
+
+# Temporary files
+*.tmp
+*.log
+.ansible/
+
+# IDE files
+.vscode/settings.json
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*~
+
+# Local testing
+test_inventory.yml
+local_vars.yml

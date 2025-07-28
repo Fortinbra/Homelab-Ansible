@@ -1,0 +1,128 @@
+---
+# Current State Documentation Playbook
+# This playbook documents the existing setup on PiTony
+# Run with --check --diff to see what would be different from current state
+
+- name: Document Current Homelab Setup
+  hosts: docker_hosts
+  become: false  # Most tasks just gather info
+  gather_facts: true
+  tasks:
+    - name: Display current system information
+      ansible.builtin.debug:
+        msg: |
+          === Current System State ===
+          Hostname: {{ ansible_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Architecture: {{ ansible_architecture }}
+          Kernel: {{ ansible_kernel }}
+          IP Address: {{ ansible_default_ipv4.address }}
+          Uptime: {{ ansible_uptime_seconds | int // 3600 }} hours
+
+    - name: Check Docker installation
+      ansible.builtin.command: docker --version
+      register: docker_version
+      changed_when: false
+      failed_when: false
+
+    - name: Check Docker Compose plugin
+      ansible.builtin.command: docker compose version
+      register: docker_compose_version
+      changed_when: false
+      failed_when: false
+
+    - name: List current Docker containers
+      ansible.builtin.command: docker ps -a --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Image{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}"
+      register: docker_containers
+      changed_when: false
+      failed_when: false
+      become: true
+
+    - name: List current Docker images
+      ansible.builtin.command: docker images --format "table {{ '{{' }}.Repository{{ '}}' }}:{{ '{{' }}.Tag{{ '}}' }}\t{{ '{{' }}.Size{{ '}}' }}"
+      register: docker_images
+      changed_when: false
+      failed_when: false
+      become: true
+
+    - name: Check current project directories
+      ansible.builtin.find:
+        paths: /home/{{ ansible_user }}
+        file_type: directory
+        excludes: ['.*']
+      register: project_dirs
+
+    - name: Check for docker-compose files
+      ansible.builtin.find:
+        paths: /home/{{ ansible_user }}
+        patterns: "docker-compose*.yml,docker-compose*.yaml,compose*.yml"
+        recurse: true
+      register: compose_files
+
+    - name: Check current boot configuration
+      ansible.builtin.slurp:
+        src: /boot/firmware/config.txt
+      register: boot_config
+      become: true
+
+    - name: Check current cmdline configuration
+      ansible.builtin.slurp:
+        src: /boot/firmware/cmdline.txt
+      register: cmdline_config
+      become: true
+
+    - name: Check swap configuration
+      ansible.builtin.slurp:
+        src: /etc/dphys-swapfile
+      register: swap_config
+      become: true
+      failed_when: false
+
+    - name: Check running services
+      ansible.builtin.service_facts:
+      register: running_services
+      become: true
+
+    - name: Display current setup summary
+      ansible.builtin.debug:
+        msg: |
+          === Current Setup Summary ===
+
+          Docker Version: {{ docker_version.stdout if docker_version.rc == 0 else 'Not installed' }}
+          Docker Compose: {{ docker_compose_version.stdout if docker_compose_version.rc == 0 else 'Not available' }}
+
+          Project Directories in /home/{{ ansible_user }}:
+          {% for dir in project_dirs.files %}
+          - {{ dir.path | basename }}
+          {% endfor %}
+
+          Docker Compose Files Found:
+          {% for file in compose_files.files %}
+          - {{ file.path }}
+          {% endfor %}
+
+          Current Boot Config Features:
+          {% set config_content = boot_config.content | b64decode %}
+          - 64-bit mode: {{ 'Yes' if 'arm_64bit=1' in config_content else 'No' }}
+          - Audio enabled: {{ 'Yes' if 'dtparam=audio=on' in config_content else 'No' }}
+          - Camera auto-detect: {{ 'Yes' if 'camera_auto_detect=1' in config_content else 'No' }}
+          - VC4 driver: {{ 'Yes' if 'dtoverlay=vc4-kms-v3d' in config_content else 'No' }}
+
+          Current Cmdline Config:
+          {{ cmdline_config.content | b64decode | trim }}
+          - cgroup memory: {{ 'Yes' if 'cgroup_memory=1' in (cmdline_config.content | b64decode) else 'No' }}
+          - cgroup cpuset: {{ 'Yes' if 'cgroup_enable=cpuset' in (cmdline_config.content | b64decode) else 'No' }}
+
+    - name: Display Docker containers
+      ansible.builtin.debug:
+        msg: |
+          === Current Docker Containers ===
+          {{ docker_containers.stdout }}
+      when: docker_containers.rc == 0
+
+    - name: Display Docker images
+      ansible.builtin.debug:
+        msg: |
+          === Current Docker Images ===
+          {{ docker_images.stdout }}
+      when: docker_images.rc == 0

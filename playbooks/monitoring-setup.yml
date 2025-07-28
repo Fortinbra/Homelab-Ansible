@@ -1,0 +1,144 @@
+---
+# System Monitoring Setup Playbook
+- name: Install Monitoring Tools
+  hosts: monitoring
+  become: true
+  gather_facts: true
+
+  vars:
+    node_exporter_version: "1.6.1"
+    node_exporter_user: "node_exporter"
+
+  tasks:
+    - name: Create node_exporter user
+      ansible.builtin.user:
+        name: "{{ node_exporter_user }}"
+        system: true
+        shell: /bin/false
+        home: /var/lib/node_exporter
+        createhome: false
+
+    - name: Download node_exporter
+      ansible.builtin.get_url:
+        url: >-
+          https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/
+          node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+        dest: /tmp/node_exporter.tar.gz
+        mode: '0644'
+
+    - name: Extract node_exporter
+      ansible.builtin.unarchive:
+        src: /tmp/node_exporter.tar.gz
+        dest: /tmp
+        remote_src: true
+
+    - name: Copy node_exporter binary
+      ansible.builtin.copy:
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+        dest: /usr/local/bin/node_exporter
+        owner: "{{ node_exporter_user }}"
+        group: "{{ node_exporter_user }}"
+        mode: '0755'
+        remote_src: true
+
+    - name: Create node_exporter systemd service
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=Node Exporter
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User={{ node_exporter_user }}
+          Group={{ node_exporter_user }}
+          Type=simple
+          ExecStart=/usr/local/bin/node_exporter
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/node_exporter.service
+        mode: '0644'
+      notify:
+        - Reload systemd
+        - Restart node_exporter
+
+    - name: Install additional monitoring tools
+      ansible.builtin.package:
+        name:
+          - htop
+          - iotop
+          - nethogs
+          - ncdu
+          - glances
+        state: present
+
+    - name: Create monitoring scripts directory
+      ansible.builtin.file:
+        path: /opt/monitoring
+        state: directory
+        mode: '0755'
+
+    - name: Create system health check script
+      ansible.builtin.copy:
+        content: |
+          #!/bin/bash
+          # System Health Check Script
+
+          echo "=== System Health Check - $(date) ==="
+          echo
+
+          echo "=== System Load ==="
+          uptime
+          echo
+
+          echo "=== Memory Usage ==="
+          free -h
+          echo
+
+          echo "=== Disk Usage ==="
+          df -h
+          echo
+
+          echo "=== Top Processes by CPU ==="
+          ps aux --sort=-%cpu | head -10
+          echo
+
+          echo "=== Top Processes by Memory ==="
+          ps aux --sort=-%mem | head -10
+          echo
+
+          echo "=== Network Connections ==="
+          netstat -tuln | grep LISTEN
+          echo
+
+          echo "=== Failed Login Attempts ==="
+          grep "Failed password" /var/log/auth.log | tail -5
+          echo
+        dest: /opt/monitoring/health-check.sh
+        mode: '0755'
+
+    - name: Create log rotation config for monitoring
+      ansible.builtin.copy:
+        content: |
+          /var/log/monitoring/*.log {
+              daily
+              missingok
+              rotate 7
+              compress
+              notifempty
+              create 644 root root
+          }
+        dest: /etc/logrotate.d/monitoring
+        mode: '0644'
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Restart node_exporter
+      ansible.builtin.systemd:
+        name: node_exporter
+        state: restarted
+        enabled: true

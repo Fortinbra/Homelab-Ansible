@@ -1,0 +1,109 @@
+---
+# Docker Installation and Setup Playbook
+- name: Install and Configure Docker
+  hosts: docker_hosts
+  become: true
+  gather_facts: true
+
+  vars:
+    docker_users:
+      - "{{ ansible_user }}"  # Add current user to docker group
+
+  tasks:
+    - name: Update package cache
+      ansible.builtin.apt:
+        update_cache: true
+      when: ansible_os_family == "Debian"
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Add Docker GPG key
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/debian/gpg
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Add Docker repository for Raspberry Pi OS
+      ansible.builtin.apt_repository:
+        repo: "deb https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install Docker CE
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+      when: ansible_os_family == "Debian"
+
+    - name: Start and enable Docker service
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add users to docker group
+      ansible.builtin.user:
+        name: "{{ item }}"
+        groups: docker
+        append: true
+      loop: "{{ docker_users }}"
+
+    - name: Install Docker Compose (standalone) for ARM64
+      ansible.builtin.get_url:
+        url: "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+      when: ansible_architecture == "aarch64"
+
+    - name: Install Docker Compose (standalone) for other architectures
+      ansible.builtin.get_url:
+        url: "https://github.com/docker/compose/releases/latest/download/docker-compose-{{ ansible_system }}-{{ ansible_architecture }}"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+      when: ansible_architecture != "aarch64"
+
+    - name: Create Docker directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+      loop:
+        - /home/{{ ansible_user }}/docker
+        - /home/{{ ansible_user }}/docker/compose
+
+    - name: Create docker-compose template
+      ansible.builtin.copy:
+        content: |
+          version: '3.8'
+          services:
+            # Add your services here
+            # example:
+            #   image: nginx:alpine
+            #   ports:
+            #     - "80:80"
+            #   restart: unless-stopped
+
+          networks:
+            default:
+              name: homelab
+        dest: /home/{{ ansible_user }}/docker/compose/docker-compose.yml
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+        force: false  # Don't overwrite if exists

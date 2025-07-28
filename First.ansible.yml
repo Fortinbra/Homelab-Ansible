@@ -1,0 +1,103 @@
+---
+# First Homelab Ansible Playbook
+# This playbook performs basic system setup and maintenance
+
+- name: Homelab Basic Setup
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    # Common packages to install on all systems
+    common_packages:
+      - curl
+      - wget
+      - git
+      - htop
+      - vim
+      - ufw
+      - fail2ban
+      - unattended-upgrades
+
+    # Timezone setting
+    system_timezone: "America/New_York"  # Change this to your timezone
+
+  tasks:
+    - name: Display system information
+      ansible.builtin.debug:
+        msg: |
+          Hostname: {{ ansible_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Architecture: {{ ansible_architecture }}
+          IP Address: {{ ansible_default_ipv4.address }}
+          Uptime: {{ ansible_uptime_seconds | int // 3600 }} hours
+
+    - name: Update package cache (Ubuntu/Debian)
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install common packages
+      ansible.builtin.package:
+        name: "{{ common_packages }}"
+        state: present
+
+    - name: Set timezone
+      ansible.builtin.command:
+        cmd: timedatectl set-timezone "{{ system_timezone }}"
+      changed_when: false
+      notify: Restart rsyslog
+
+    - name: Ensure SSH service is running and enabled
+      ansible.builtin.systemd:
+        name: ssh
+        state: started
+        enabled: true
+      when: ansible_os_family == "Debian"
+
+    - name: Configure UFW firewall (allow SSH)
+      community.general.ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+      when: ansible_os_family == "Debian"
+
+    - name: Enable UFW firewall
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+      when: ansible_os_family == "Debian"
+
+    - name: Create a simple system maintenance script
+      ansible.builtin.copy:
+        content: |
+          #!/bin/bash
+          # Simple maintenance script
+          echo "Running system maintenance..."
+          apt update && apt upgrade -y
+          apt autoremove -y
+          apt autoclean
+          echo "Maintenance completed on $(date)"
+        dest: /usr/local/bin/system-maintenance.sh
+        mode: '0755'
+        owner: root
+        group: root
+      when: ansible_os_family == "Debian"
+
+    - name: Check disk space
+      ansible.builtin.command:
+        cmd: df -h
+      register: disk_space
+      changed_when: false
+
+    - name: Display disk space
+      ansible.builtin.debug:
+        var: disk_space.stdout_lines
+
+  handlers:
+    - name: Restart rsyslog
+      ansible.builtin.systemd:
+        name: rsyslog
+        state: restarted
